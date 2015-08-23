@@ -1,0 +1,94 @@
+---
+title: "Practical Machine Learning"
+output: html_document
+---
+Human Activity Recognition (HAR)
+--------------------------------
+
+HAR is the technique of determining from incomming sensor data which activity is being performed. Besides being a good excersise in machine learning, it has practical applications in elderly monitoring, life log systems for monitoring energy expenditure and for supporting weight-loss programs, and digital assistants for weight lifting exercises.   
+The dataset used has 5 classes of activities collected from six participants who were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).  
+Below I will describe how I used the data to train an algorithm to predict how the activity was performed.  
+
+Set up library etc.:  
+```{r, message=FALSE}
+setwd("~/DataScience/train")
+library(e1071)
+library(caret)
+library(randomForest)
+set.seed(1221)
+```
+
+# Load data: 
+Also replacing all the missing values types with NA.
+```{r}
+training <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+testing <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+```
+
+# Clean data:
+There are a 160 variables, of which only some will have predictive value, removed are columns with many NA, and those which I judge will not be helpfull.
+```{r}
+# Removes too many NA's (196 boundary is based on 10% of total rows)
+training <- training[, colSums(is.na(training)) < 196]
+
+# removes those columns which I do not want
+training <- training[ , !names(training) %in% c("X","user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp", "new_window", "num_window")]
+```
+
+# Make subsets:
+I divide the main training data set up into two: a sub training set of 75%, and sub test set of 25%. I will train my model on the sub training set, and see how well it performs on the sub test set.  
+```{r}
+subSamples <- createDataPartition(y = training$classe, p=0.75, list=FALSE)
+subTraining <- training[subSamples, ] 
+subTesting <- training[-subSamples, ]
+```
+
+# Train Model:
+I chose the random forest algorithm because my pc had some issues running other methods, and the results are good enough. The variable which needs to be predicted is the *classe*.
+```{r}
+model <- randomForest(classe ~., data = subTraining, method = "class")
+```
+
+# Predict with test set:
+Using the model on the sub test set.
+```{r}
+prediction <- predict(model, subTesting, type = "class")
+```
+
+# Check Accuracy:
+The authors of the paper have given a benchmark for accuracy:
+```
+Correctly Classified Instances         164662 	99.4144 %
+Incorrectly Classified Instances 	970 	0.5856 %
+Root mean squared error 	0.0463 	
+Relative absolute error 	0.7938 % 	
+Relative absolute error 	0.7938 % 	
+```
+The accuarcy is near the benchmark.
+```{r}
+confusionMatrix(prediction, subTesting$classe)
+```
+
+# Predict with final test set:
+Because the model is already good, it is used on the actual test set.
+```{r}
+predictfinal <- predict(model, testing, type="class")
+predictfinal
+```
+
+# Writing files for submission
+The results are written to txt files, which can be used for submission. 
+```{r}
+pml_write_files = function(x){
+        n = length(x)
+        for(i in 1:n){
+                filename = paste0("problem_id_",i,".txt")
+                write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+        }
+}
+
+pml_write_files(predictfinal)
+```
+
+Please find the data and documentation [here](http://groupware.les.inf.puc-rio.br/har)  
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
